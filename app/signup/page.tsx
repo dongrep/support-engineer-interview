@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
+import { isValidAge } from "@/helpers/ageValidator";
 
 type SignupFormData = {
   email: string;
@@ -25,6 +26,10 @@ export default function SignupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
+  const [emailHint, setEmailHint] = useState("");
+  const [suggestedEmail, setSuggestedEmail] = useState<string | null>(null);
+  const [showNormalizationWarning, setShowNormalizationWarning] =
+    useState(false);
 
   const {
     register,
@@ -37,13 +42,62 @@ export default function SignupPage() {
 
   const password = watch("password");
 
+  const checkEmailSpecialCases = (email: string) => {
+    const val = (email || "").trim();
+    if (!val) {
+      setEmailHint("");
+      setSuggestedEmail(null);
+      setShowNormalizationWarning(false);
+      return;
+    }
+
+    // Show normalization warning if user typed uppercase characters
+    setShowNormalizationWarning(val !== val.toLowerCase());
+
+    // detect some common TLD typos
+    const typos: Record<string, string> = {
+      ".con": ".com",
+      ".cim": ".com",
+      ".coom": ".com",
+      ".comm": ".com",
+    };
+
+    const parts = val.split("@");
+    if (parts.length < 2) {
+      setEmailHint("");
+      setSuggestedEmail(null);
+      return;
+    }
+
+    const local = parts[0];
+    const domain = parts[1].toLowerCase();
+
+    for (const typo in typos) {
+      if (domain.endsWith(typo)) {
+        const suggestion = domain.slice(0, -typo.length) + typos[typo];
+        setEmailHint("Looks like a common typo in the domain");
+        setSuggestedEmail(`${local}@${suggestion}`);
+        return;
+      }
+    }
+
+    // clear if nothing suspicious
+    setEmailHint("");
+    setSuggestedEmail(null);
+  };
+
   const nextStep = async () => {
     let fieldsToValidate: (keyof SignupFormData)[] = [];
 
     if (step === 1) {
       fieldsToValidate = ["email", "password", "confirmPassword"];
     } else if (step === 2) {
-      fieldsToValidate = ["firstName", "lastName", "phoneNumber", "dateOfBirth"];
+      fieldsToValidate = [
+        "firstName",
+        "lastName",
+        "phoneNumber",
+        "dateOfBirth",
+      ];
     }
 
     const isValid = await trigger(fieldsToValidate);
@@ -57,10 +111,24 @@ export default function SignupPage() {
   const onSubmit = async (data: SignupFormData) => {
     try {
       setError("");
-      await signupMutation.mutateAsync(data);
+      const res = (await signupMutation.mutateAsync(data)) as {
+        emailWasNormalized?: boolean;
+      };
+
+      // If server normalized the email, notify the user briefly
+      if (res?.emailWasNormalized) {
+        // Show a non-blocking alert so user is aware
+        alert(
+          `We normalized your email to lowercase for account matching. Stored as: ${data.email
+            .trim()
+            .toLowerCase()}`,
+        );
+      }
+
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
+    } catch (err: unknown) {
+      const maybe = err as { message?: string } | undefined;
+      setError(maybe?.message ?? "Something went wrong");
     }
   };
 
@@ -68,33 +136,63 @@ export default function SignupPage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">Create your account</h2>
-          <p className="mt-2 text-center text-sm text-gray-600">Step {step} of 3</p>
+          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            Create your account
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Step {step} of 3
+          </p>
         </div>
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit(onSubmit)}>
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700">
                   Email
                 </label>
                 <input
                   {...register("email", {
                     required: "Email is required",
                     pattern: {
-                      value: /^\S+@\S+$/i,
+                      // require an '@' and at least one dot after it (simple improvement)
+                      value: /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i,
                       message: "Invalid email address",
+                    },
+                    onBlur: (e) => {
+                      const val = e.target.value || "";
+                      checkEmailSpecialCases(val);
                     },
                   })}
                   type="email"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
-                {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+                {emailHint && (
+                  <p className="mt-1 text-sm text-yellow-800">{emailHint}</p>
+                )}
+                {suggestedEmail && (
+                  <p className="mt-1 text-sm text-blue-800">
+                    Did you mean <strong>{suggestedEmail}</strong>?
+                  </p>
+                )}
+                {showNormalizationWarning && (
+                  <p className="mt-1 text-sm text-gray-700">
+                    We will store your email in lowercase for matching.
+                  </p>
+                )}
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="password"
+                  className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
                 <input
@@ -106,32 +204,49 @@ export default function SignupPage() {
                     },
                     validate: {
                       notCommon: (value) => {
-                        const commonPasswords = ["password", "12345678", "qwerty"];
-                        return !commonPasswords.includes(value.toLowerCase()) || "Password is too common";
+                        const commonPasswords = [
+                          "password",
+                          "12345678",
+                          "qwerty",
+                        ];
+                        return (
+                          !commonPasswords.includes(value.toLowerCase()) ||
+                          "Password is too common"
+                        );
                       },
-                      hasNumber: (value) => /\d/.test(value) || "Password must contain a number",
+                      hasNumber: (value) =>
+                        /\d/.test(value) || "Password must contain a number",
                     },
                   })}
                   type="password"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
-                {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>}
+                {errors.password && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="confirmPassword"
+                  className="block text-sm font-medium text-gray-700">
                   Confirm Password
                 </label>
                 <input
                   {...register("confirmPassword", {
                     required: "Please confirm your password",
-                    validate: (value) => value === password || "Passwords do not match",
+                    validate: (value) =>
+                      value === password || "Passwords do not match",
                   })}
                   type="password"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
                 {errors.confirmPassword && (
-                  <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.confirmPassword.message}
+                  </p>
                 )}
               </div>
             </div>
@@ -141,32 +256,50 @@ export default function SignupPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label htmlFor="firstName" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="firstName"
+                    className="block text-sm font-medium text-gray-700">
                     First Name
                   </label>
                   <input
-                    {...register("firstName", { required: "First name is required" })}
+                    {...register("firstName", {
+                      required: "First name is required",
+                    })}
                     type="text"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                   />
-                  {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName.message}</p>}
+                  {errors.firstName && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.firstName.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label htmlFor="lastName" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="lastName"
+                    className="block text-sm font-medium text-gray-700">
                     Last Name
                   </label>
                   <input
-                    {...register("lastName", { required: "Last name is required" })}
+                    {...register("lastName", {
+                      required: "Last name is required",
+                    })}
                     type="text"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                   />
-                  {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>}
+                  {errors.lastName && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.lastName.message}
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div>
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="phoneNumber"
+                  className="block text-sm font-medium text-gray-700">
                   Phone Number
                 </label>
                 <input
@@ -181,19 +314,33 @@ export default function SignupPage() {
                   placeholder="1234567890"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
-                {errors.phoneNumber && <p className="mt-1 text-sm text-red-600">{errors.phoneNumber.message}</p>}
+                {errors.phoneNumber && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.phoneNumber.message}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="dateOfBirth"
+                  className="block text-sm font-medium text-gray-700">
                   Date of Birth
                 </label>
                 <input
-                  {...register("dateOfBirth", { required: "Date of birth is required" })}
+                  {...register("dateOfBirth", {
+                    required: "Date of birth is required",
+                    validate: (value) =>
+                      isValidAge(value) || "You must be at least 18 years old",
+                  })}
                   type="date"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
-                {errors.dateOfBirth && <p className="mt-1 text-sm text-red-600">{errors.dateOfBirth.message}</p>}
+                {errors.dateOfBirth && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.dateOfBirth.message}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -201,7 +348,9 @@ export default function SignupPage() {
           {step === 3 && (
             <div className="space-y-4">
               <div>
-                <label htmlFor="ssn" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="ssn"
+                  className="block text-sm font-medium text-gray-700">
                   Social Security Number
                 </label>
                 <input
@@ -216,11 +365,17 @@ export default function SignupPage() {
                   placeholder="123456789"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
-                {errors.ssn && <p className="mt-1 text-sm text-red-600">{errors.ssn.message}</p>}
+                {errors.ssn && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.ssn.message}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label htmlFor="address" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="address"
+                  className="block text-sm font-medium text-gray-700">
                   Street Address
                 </label>
                 <input
@@ -228,12 +383,18 @@ export default function SignupPage() {
                   type="text"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                 />
-                {errors.address && <p className="mt-1 text-sm text-red-600">{errors.address.message}</p>}
+                {errors.address && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.address.message}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-6 gap-4">
                 <div className="col-span-3">
-                  <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="city"
+                    className="block text-sm font-medium text-gray-700">
                     City
                   </label>
                   <input
@@ -241,11 +402,17 @@ export default function SignupPage() {
                     type="text"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                   />
-                  {errors.city && <p className="mt-1 text-sm text-red-600">{errors.city.message}</p>}
+                  {errors.city && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.city.message}
+                    </p>
+                  )}
                 </div>
 
                 <div className="col-span-1">
-                  <label htmlFor="state" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="state"
+                    className="block text-sm font-medium text-gray-700">
                     State
                   </label>
                   <input
@@ -260,11 +427,17 @@ export default function SignupPage() {
                     placeholder="CA"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                   />
-                  {errors.state && <p className="mt-1 text-sm text-red-600">{errors.state.message}</p>}
+                  {errors.state && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.state.message}
+                    </p>
+                  )}
                 </div>
 
                 <div className="col-span-2">
-                  <label htmlFor="zipCode" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="zipCode"
+                    className="block text-sm font-medium text-gray-700">
                     ZIP Code
                   </label>
                   <input
@@ -279,7 +452,11 @@ export default function SignupPage() {
                     placeholder="12345"
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
                   />
-                  {errors.zipCode && <p className="mt-1 text-sm text-red-600">{errors.zipCode.message}</p>}
+                  {errors.zipCode && (
+                    <p className="mt-1 text-sm text-red-600">
+                      {errors.zipCode.message}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -296,8 +473,7 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={prevStep}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
+                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Previous
               </button>
             )}
@@ -306,17 +482,17 @@ export default function SignupPage() {
               <button
                 type="button"
                 onClick={nextStep}
-                className="ml-auto px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
+                className="ml-auto px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
                 Next
               </button>
             ) : (
               <button
                 type="submit"
                 disabled={signupMutation.isPending}
-                className="ml-auto px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {signupMutation.isPending ? "Creating account..." : "Create Account"}
+                className="ml-auto px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+                {signupMutation.isPending
+                  ? "Creating account..."
+                  : "Create Account"}
               </button>
             )}
           </div>
@@ -324,7 +500,9 @@ export default function SignupPage() {
 
         <p className="text-center text-sm text-gray-600">
           Already have an account?{" "}
-          <Link href="/login" className="font-medium text-blue-600 hover:text-blue-500">
+          <Link
+            href="/login"
+            className="font-medium text-blue-600 hover:text-blue-500">
             Sign in
           </Link>
         </p>
@@ -332,3 +510,5 @@ export default function SignupPage() {
     </div>
   );
 }
+
+// helper placeholder removed (logic is inside component)

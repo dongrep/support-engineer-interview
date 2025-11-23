@@ -5,27 +5,37 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { isValidAge } from "@/helpers/ageValidator";
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
-        email: z.string().email().toLowerCase(),
+        // Keep validation but do not silently lowercase via zod transform
+        email: z.string().email(),
         password: z.string().min(8),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
-        dateOfBirth: z.string(),
+        dateOfBirth: z.string().refine((dob) => isValidAge(dob), { message: "Date of birth must be at least 18 years before today" }),
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
         state: z.string().length(2).toUpperCase(),
         zipCode: z.string().regex(/^\d{5}$/),
-      })
-    )
-    .mutation(async ({ input, ctx }) => {
-      const existingUser = await db.select().from(users).where(eq(users.email, input.email)).get();
+            })
+          )
+          .mutation(async ({ input, ctx }) => {
+      // Normalize for comparison/storage, but don't rely on zod to mutate input
+      const normalizedEmail = input.email.trim().toLowerCase();
+
+      // Check for existing user using a case-insensitive comparison
+      const existingUser = await db
+        .select()
+        .from(users)
+        .where(eq(sql`lower(${users.email})`, normalizedEmail))
+        .get();
 
       if (existingUser) {
         throw new TRPCError({
@@ -36,13 +46,19 @@ export const authRouter = router({
 
       const hashedPassword = await bcrypt.hash(input.password, 10);
 
+      // Insert using the normalized email to keep storage consistent
       await db.insert(users).values({
         ...input,
+        email: normalizedEmail,
         password: hashedPassword,
       });
 
       // Fetch the created user
-      const user = await db.select().from(users).where(eq(users.email, input.email)).get();
+      const user = await db
+        .select()
+        .from(users)
+        .where(eq(sql`lower(${users.email})`, normalizedEmail))
+        .get();
 
       if (!user) {
         throw new TRPCError({
@@ -72,7 +88,10 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      // Indicate if the email was normalized compared to what the user submitted
+      const emailWasNormalized = normalizedEmail !== input.email;
+
+      return { user: { ...user, password: undefined }, token, emailWasNormalized };
     }),
 
   login: publicProcedure
@@ -83,7 +102,12 @@ export const authRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const user = await db.select().from(users).where(eq(users.email, input.email)).get();
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const user = await db
+        .select()
+        .from(users)
+        .where(eq(sql`lower(${users.email})`, normalizedEmail))
+        .get();
 
       if (!user) {
         throw new TRPCError({
