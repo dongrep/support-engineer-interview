@@ -89,6 +89,22 @@
 
 ---
 
+### Ticket PERF-401: Account Creation Error
+
+- **Reporter**: Support Team
+- **Priority**: Critical
+- **Description**: New accounts show $100 balance when DB operations fail.
+- **Impact**: Incorrect balance displays.
+
+**RCA**: The fallback for account creation was returning a default object with `balance = 100`.
+
+**Solution**:
+
+1. Update the account creation logic to handle database operation failures explicitly.
+2. Ensure no default balance is set when the database operation fails.
+3. Add error handling to notify the user of the failure.
+4. Write unit tests to simulate database failures and verify the correct behavior.
+
 ### Template for Future Tickets
 
 #### Ticket [ID]: [Title]
