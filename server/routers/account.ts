@@ -65,15 +65,112 @@ export const accountRouter = router({
     return userAccounts;
   }),
 
-  fundAccount: protectedProcedure
+  transferFromAccount: protectedProcedure
+    .input(
+      z.object({
+        fromAccountNumber: z.string(),
+        routingNumber: z.string(),
+        toAccountId: z.number(),
+        amount: z.number().positive(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const amount = parseFloat(input.amount.toString());
+
+      // Verify fromAccount exists and belongs to the user
+      const fromAccount = await db
+        .select()
+        .from(accounts)
+        .where(and(eq(accounts.accountNumber, input.fromAccountNumber), eq(accounts.userId, ctx.user.id)))
+        .get();
+
+      if (!fromAccount) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Source account not found",
+        });
+      }
+
+      if (fromAccount.status !== "active") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Source account is not active",
+        });
+      }
+
+      if (fromAccount.balance < amount) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Insufficient funds in source account",
+        });
+      }
+
+      // Verify toAccount exists and belongs to the user
+      const toAccount = await db
+        .select()
+        .from(accounts)
+        .where(and(eq(accounts.id, input.toAccountId), eq(accounts.userId, ctx.user.id)))
+        .get();
+
+      if (!toAccount) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Destination account not found",
+        });
+      }
+
+      if (toAccount.status !== "active") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Destination account is not active",
+        });
+      }
+
+      // Create withdrawal transaction from fromAccount
+      await db.insert(transactions).values({
+        accountId: fromAccount.id,
+        type: "withdrawal",
+        amount,
+        description: `Transfer to account ${toAccount.accountNumber}`,
+        status: "completed",
+        processedAt: new Date().toISOString(),
+      });
+
+      // Create deposit transaction to toAccount
+      await db.insert(transactions).values({
+        accountId: toAccount.id,
+        type: "deposit",
+        amount,
+        description: `Transfer from account ${fromAccount.accountNumber}`,
+        status: "completed",
+        processedAt: new Date().toISOString(),
+      });
+
+      // Update balances
+      await db
+        .update(accounts)
+        .set({
+          balance: fromAccount.balance - amount,
+        })
+        .where(eq(accounts.id, fromAccount.id));
+
+      await db
+        .update(accounts)
+        .set({
+          balance: toAccount.balance + amount,
+        })
+        .where(eq(accounts.id, toAccount.id));
+
+      return { message: "Transfer successful" };
+    }),
+
+  fundAccountUsingCard: protectedProcedure
     .input(
       z.object({
         accountId: z.number(),
         amount: z.number().positive(),
         fundingSource: z.object({
-          type: z.enum(["card", "bank"]),
-          accountNumber: z.string(),
-          routingNumber: z.string().optional(),
+          cardNumber: z.string(),
         }),
       })
     )
@@ -106,7 +203,7 @@ export const accountRouter = router({
         accountId: input.accountId,
         type: "deposit",
         amount,
-        description: `Funding from ${input.fundingSource.type}`,
+        description: `Funding from card ${input.fundingSource.cardNumber.slice(-4)}`,
         status: "completed",
         processedAt: new Date().toISOString(),
       });

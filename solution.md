@@ -138,10 +138,6 @@
 
 ### Ticket PERF-404: Transaction Sorting
 
-- **Reporter**: Jane Doe
-- **Priority**: Medium
-- **Description**: "Transaction order seems random sometimes"
-- **Impact**: Confusion when reviewing transaction history
 
 **RCA**: Transaction queries did not include an explicit `ORDER BY` clause, so the database returned rows in a non-deterministic order which made the UI appear to show transactions in random order.
 
@@ -152,7 +148,39 @@
 3. Add tests:
   - Unit tests for the transaction retrieval query to assert returned rows are ordered as expected.
 
----
+
+
+### Ticket PERF-405: Missing Transactions
+
+- **Reporter**: Multiple Users
+- **Priority**: Critical
+- **Description**: "Not all transactions appear in history after multiple funding events"
+- **Impact**: Users cannot verify all their transactions
+
+**RCA**: Transactions were sometimes served from a (stale/invalid) cache or the transaction list for a given account was not invalidated after funding events, so new transactions were not included in subsequent reads.
+
+**Solution**:
+
+1. Invalidate the transactions cache for the affected account after any funding or mutation that creates transactions (for example, after funding, transfer, or withdrawal mutations).
+2. Ensure transactional writes (create funding and corresponding ledger entries) are committed before cache population.
+
+### Ticket PERF-406: Balance Calculation
+
+- **Reporter**: Finance Team
+- **Priority**: Critical
+- **Description**: "Account balances become incorrect after many transactions"
+- **Impact**: Critical financial discrepancies
+
+**RCA**: Two issues were identified:
+
+- Transfer flows: when transferring from another account, no withdrawal transaction was being created, causing the ledger and balance to become inconsistent.
+
+**Solution**:
+
+1. Use tRPC utilities (invalidate queries) to invalidate the transactions and balance cache for the specific account after any mutation that affects the account (funding, withdrawal, transfer). This ensures subsequent reads fetch fresh data.
+2. Update the transfer implementation to perform both a withdrawal from the source account and a deposit into the destination account within a single, atomic mutation (or database transaction) so both ledger entries exist.
+
+
 
 
 ### Template for Future Tickets
