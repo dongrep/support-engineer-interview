@@ -105,6 +105,27 @@
 3. Add error handling to notify the user of the failure.
 4. Write unit tests to simulate database failures and verify the correct behavior.
 
+---
+### Ticket PERF-402: Logout Issues
+
+- **Reporter**: QA Team
+- **Priority**: Medium
+- **Description**: "Logout always reports success even when session remains active"
+- **Impact**: Users believe they're logged out while their session is still active, creating security and UX confusion.
+
+**RCA**: The logout endpoint was implemented as a publicProcedure, allowing it to return success even when no authenticated session was present or when session invalidation failed.
+
+**Solution**:
+
+1. Change the logout endpoint to use protectedProcedure so the route requires a valid session context and cannot be invoked as a no-op by unauthenticated callers.
+2. On logout, explicitly invalidate the server-side session store (or revoke the token) and clear any authentication cookies or client-side tokens.
+3. Return an error if session invalidation fails instead of a success message.
+4. Add unit/integration tests to:
+  - Verify protected access to the logout route.
+  - Confirm session is removed from the store and client auth artifacts are cleared.
+  - Simulate session-store failures and ensure a failure response is returned.
+
+
 ### Template for Future Tickets
 
 #### Ticket [ID]: [Title]
