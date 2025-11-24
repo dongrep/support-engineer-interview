@@ -108,10 +108,6 @@
 ---
 ### Ticket PERF-402: Logout Issues
 
-- **Reporter**: QA Team
-- **Priority**: Medium
-- **Description**: "Logout always reports success even when session remains active"
-- **Impact**: Users believe they're logged out while their session is still active, creating security and UX confusion.
 
 **RCA**: The logout endpoint was implemented as a publicProcedure, allowing it to return success even when no authenticated session was present or when session invalidation failed.
 
@@ -124,6 +120,27 @@
   - Verify protected access to the logout route.
   - Confirm session is removed from the store and client auth artifacts are cleared.
   - Simulate session-store failures and ensure a failure response is returned.
+
+### Ticket PERF-403: Session Expiry
+
+- **Reporter**: Security Team
+- **Priority**: High
+- **Description**: "Expiring sessions still considered valid until exact expiry time"
+- **Impact**: Security risk near session expiration
+
+**RCA**: The server currently only sends a warning when less than a minute remains on a session. This allows near-expired sessions to be treated as valid up until the exact expiry instant, creating a narrow window where a session may still be accepted when it should be considered invalid.
+
+**Solution**:
+
+1. Update session validation in `server/trpc.ts` so sessions with 30 seconds or less remaining are treated as expired: delete the session from the store and set the request `user` to `null`.
+2. Ensure context creation deletes sessions immediately when they are expired or considered near-expired so protected routes will receive an `UNAUTHORIZED` error.
+3. Return an error for protected routes when session invalidation fails instead of silently reporting success.
+4. Add unit/integration tests to:
+  - Simulate sessions with >30s remaining (should be valid).
+  - Simulate sessions with <=30s remaining (should be deleted and the user treated as unauthenticated).
+  - Simulate DB delete failures and verify error handling/logging.
+
+---
 
 
 ### Template for Future Tickets
