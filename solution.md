@@ -23,7 +23,7 @@
 - **Examples**:  
   - Accepts "TEST@example.com" but converts to lowercase without notifying the user.  
   - No validation for common typos like ".con" instead of ".com".  
-  - 
+
 **Solution**: Implement regex-based validation for email formats, introduce a state variable to track changes, and add suggestions for common TLD errors.
 
 ---
@@ -54,6 +54,21 @@
 
 ---
 
+### Ticket SEC-302: Insecure Random Numbers
+
+- **Reporter**: Security Team  
+- **Priority**: High  
+- **Description**: Account numbers generated using `Math.random()`  
+- **Impact**: Potentially predictable account numbers  
+
+**RCA**: Random numbers as Acccount Number could be predicted  
+
+**Solution**:  
+1. Have a BIN for identification.  
+2. Use the `crypto` library to generate a 10-digit number.  
+3. Use Luhn's Algorithm to calculate the check digit.  
+4. Test the function to produce 10,000 accounts and ensure each account starts with the BIN.  
+
 ### Template for Future Tickets
 
 #### Ticket [ID]: [Title]
@@ -68,4 +83,6 @@
 - **Expected**: [What should happen]  
 - **Actual**: [What actually happens]  
 
+
+**RCA**: [root cause]
 **Solution**: [Proposed solution or fix]

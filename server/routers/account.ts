@@ -4,12 +4,7 @@ import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-
-function generateAccountNumber(): string {
-  return Math.floor(Math.random() * 1000000000)
-    .toString()
-    .padStart(10, "0");
-}
+import { generateAccountNumber } from "@/helpers/accountNumberGenerator";
 
 export const accountRouter = router({
   createAccount: protectedProcedure

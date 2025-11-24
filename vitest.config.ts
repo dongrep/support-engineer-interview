@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     env: {
       SSN_ENCRYPTION_KEY: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+      BANK_BIN: '69420',
     },
     environment: 'node',  
     globals: true,  // Makes describe, it, expect available without imports
