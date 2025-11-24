@@ -173,6 +173,19 @@
 
 ---
 
+**Ticket VAL-206: Card Number Validation**
+
+- **Reporter**: David Brown
+- **Priority**: Critical
+- **Description**: "System accepts invalid card numbers"
+- **Impact**: Failed transactions and customer frustration
+
+**RCA**: Very basic card validation allowed invalid card numbers to be accepted (no Luhn check).
+
+**Solution**: Implement Luhn's algorithm for card number validation and add unit tests verifying accepted and rejected card numbers.
+
+---
+
 ### Ticket PERF-403: Session Expiry
 
 **RCA**: The server currently only sends a warning when less than a minute remains on a session. This allows near-expired sessions to be treated as valid up until the exact expiry instant, creating a narrow window where a session may still be accepted when it should be considered invalid.

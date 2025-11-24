@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
+import { validateLuhn } from "@/helpers/luhnCheck";
 
 interface FundingModalProps {
   accountId: number;
@@ -39,6 +40,9 @@ export function FundingModal({
   const fundAccountUsingCardMutation =
     trpc.account.fundAccountUsingCard.useMutation();
   const transferFundsMutation = trpc.account.transferFromAccount.useMutation();
+
+  const isPending =
+    fundAccountUsingCardMutation.isPending || transferFundsMutation.isPending;
 
   const onSubmit = async (data: FundingFormData) => {
     setError("");
@@ -175,6 +179,7 @@ export function FundingModal({
                     return (
                       value.startsWith("4") ||
                       value.startsWith("5") ||
+                      validateLuhn(value) ||
                       "Invalid card number"
                     );
                   },
@@ -229,11 +234,9 @@ export function FundingModal({
             </button>
             <button
               type="submit"
-              disabled={fundAccountUsingCardMutation.isPending}
+              disabled={isPending}
               className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50">
-              {fundAccountUsingCardMutation.isPending
-                ? "Processing..."
-                : "Fund Account"}
+              {isPending ? "Processing..." : "Fund Account"}
             </button>
           </div>
         </form>
