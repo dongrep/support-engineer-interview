@@ -37,6 +37,30 @@
 
 **Solution**: Fixed using age validator helper function to check if the user is at least 18 years or older
 
+### Ticket VAL-205: Zero amount funding (15 min)
+
+- **Priority**: HIGH
+- **Impact**: Noise in ledger and misleading transaction history
+
+**RCA**: No minimum amount validation was enforced on funding requests, allowing 0 amounts to be accepted and recorded.
+
+### Ticket VAL-207: Routing number required
+
+- **Priority**: HIGH
+- **Impact**: Failed or delayed transfers due to missing routing information
+
+**RCA**: The routing number field was marked optional in validation/schema, allowing records to be created without it.
+
+**Solution**:
+
+1. Add client-side form validation to prevent submission without a routing number.
+2. Add a short unit test to assert validation fails when the routing number is missing.
+
+**Solution**:
+
+1. Add client-side guard to prevent submitting zero or negative amounts.
+2. Add unit tests to ensure zero and negative amounts are rejected.
+
 ---
 
 ### Ticket SEC-301: SSN Storage
@@ -106,8 +130,8 @@
 4. Write unit tests to simulate database failures and verify the correct behavior.
 
 ---
-### Ticket PERF-402: Logout Issues
 
+### Ticket PERF-402: Logout Issues
 
 **RCA**: The logout endpoint was implemented as a publicProcedure, allowing it to return success even when no authenticated session was present or when session invalidation failed.
 
@@ -117,12 +141,12 @@
 2. On logout, explicitly invalidate the server-side session store (or revoke the token) and clear any authentication cookies or client-side tokens.
 3. Return an error if session invalidation fails instead of a success message.
 4. Add unit/integration tests to:
-  - Verify protected access to the logout route.
-  - Confirm session is removed from the store and client auth artifacts are cleared.
-  - Simulate session-store failures and ensure a failure response is returned.
+
+- Verify protected access to the logout route.
+- Confirm session is removed from the store and client auth artifacts are cleared.
+- Simulate session-store failures and ensure a failure response is returned.
 
 ### Ticket PERF-403: Session Expiry
-
 
 **RCA**: The server currently only sends a warning when less than a minute remains on a session. This allows near-expired sessions to be treated as valid up until the exact expiry instant, creating a narrow window where a session may still be accepted when it should be considered invalid.
 
@@ -132,12 +156,12 @@
 2. Ensure context creation deletes sessions immediately when they are expired or considered near-expired so protected routes will receive an `UNAUTHORIZED` error.
 3. Return an error for protected routes when session invalidation fails instead of silently reporting success.
 4. Add unit/integration tests to:
-  - Simulate sessions with >30s remaining (should be valid).
-  - Simulate sessions with <=30s remaining (should be deleted and the user treated as unauthenticated).
-  - Simulate DB delete failures and verify error handling/logging.
+
+- Simulate sessions with >30s remaining (should be valid).
+- Simulate sessions with <=30s remaining (should be deleted and the user treated as unauthenticated).
+- Simulate DB delete failures and verify error handling/logging.
 
 ### Ticket PERF-404: Transaction Sorting
-
 
 **RCA**: Transaction queries did not include an explicit `ORDER BY` clause, so the database returned rows in a non-deterministic order which made the UI appear to show transactions in random order.
 
@@ -146,9 +170,8 @@
 1. Add an explicit `orderBy` clause to the server query that retrieves transactions (for example, order by `createdAt` descending to show newest first). Include a deterministic tie-breaker (e.g., `id`) to ensure stable ordering when timestamps are identical.
 2. Update any client-side sorting or rendering code to respect the server ordering and avoid additional client-side shuffling.
 3. Add tests:
-  - Unit tests for the transaction retrieval query to assert returned rows are ordered as expected.
 
-
+- Unit tests for the transaction retrieval query to assert returned rows are ordered as expected.
 
 ### Ticket PERF-405: Missing Transactions
 
@@ -180,7 +203,20 @@
 1. Use tRPC utilities (invalidate queries) to invalidate the transactions and balance cache for the specific account after any mutation that affects the account (funding, withdrawal, transfer). This ensures subsequent reads fetch fresh data.
 2. Update the transfer implementation to perform both a withdrawal from the source account and a deposit into the destination account within a single, atomic mutation (or database transaction) so both ledger entries exist.
 
+### Ticket VAL-208: Weak Password Requirements
 
+- **Reporter**: Security Team
+- **Priority**: Critical
+- **Description**: "Password validation only checks length, not complexity"
+- **Impact**: Account security risks
+
+**RCA**: The password validation enforced only a minimum length, allowing weak passwords that lacked complexity (uppercase, lowercase, numeric, special characters).
+
+**Solution**:
+
+1. Enforce password complexity in the validation/schema: require at least 1 uppercase, 1 lowercase, 1 numeric, 1 special character, and minimum 8 characters.
+2. Add client-side feedback to show which complexity requirements are unmet as the user types.
+3. Add unit tests validating both accepted and rejected password inputs.
 
 
 ### Template for Future Tickets

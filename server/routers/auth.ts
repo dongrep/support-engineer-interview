@@ -8,6 +8,7 @@ import { users, sessions } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { isValidAge } from "@/helpers/ageValidator";
 import { encryptSSN } from "@/helpers/ssnEncryption";
+import { validatePassword } from "@/helpers/passowrdValidator";
 
 export const authRouter = router({
   signup: publicProcedure
@@ -15,7 +16,10 @@ export const authRouter = router({
       z.object({
         // Keep validation but do not silently lowercase via zod transform
         email: z.string().email(),
-        password: z.string().min(8),
+        password: z.string().refine((val) => validatePassword(val), {
+          message:
+            "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character",
+        }),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
