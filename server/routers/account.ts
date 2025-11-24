@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, asc } from "drizzle-orm";
 import { generateAccountNumber } from "@/helpers/accountNumberGenerator";
 
 export const accountRouter = router({
@@ -157,7 +157,8 @@ export const accountRouter = router({
       const accountTransactions = await db
         .select()
         .from(transactions)
-        .where(eq(transactions.accountId, input.accountId));
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(desc(transactions.createdAt), asc(transactions.id)); // Secondary sort to ensure consistent order
 
       const enrichedTransactions = [];
       for (const transaction of accountTransactions) {

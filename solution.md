@@ -123,10 +123,6 @@
 
 ### Ticket PERF-403: Session Expiry
 
-- **Reporter**: Security Team
-- **Priority**: High
-- **Description**: "Expiring sessions still considered valid until exact expiry time"
-- **Impact**: Security risk near session expiration
 
 **RCA**: The server currently only sends a warning when less than a minute remains on a session. This allows near-expired sessions to be treated as valid up until the exact expiry instant, creating a narrow window where a session may still be accepted when it should be considered invalid.
 
@@ -139,6 +135,22 @@
   - Simulate sessions with >30s remaining (should be valid).
   - Simulate sessions with <=30s remaining (should be deleted and the user treated as unauthenticated).
   - Simulate DB delete failures and verify error handling/logging.
+
+### Ticket PERF-404: Transaction Sorting
+
+- **Reporter**: Jane Doe
+- **Priority**: Medium
+- **Description**: "Transaction order seems random sometimes"
+- **Impact**: Confusion when reviewing transaction history
+
+**RCA**: Transaction queries did not include an explicit `ORDER BY` clause, so the database returned rows in a non-deterministic order which made the UI appear to show transactions in random order.
+
+**Solution**:
+
+1. Add an explicit `orderBy` clause to the server query that retrieves transactions (for example, order by `createdAt` descending to show newest first). Include a deterministic tie-breaker (e.g., `id`) to ensure stable ordering when timestamps are identical.
+2. Update any client-side sorting or rendering code to respect the server ordering and avoid additional client-side shuffling.
+3. Add tests:
+  - Unit tests for the transaction retrieval query to assert returned rows are ordered as expected.
 
 ---
 

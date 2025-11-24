@@ -161,7 +161,7 @@ export const authRouter = router({
         token = (ctx.req as any).cookies.session;
       } else {
         // Fall back to parsing the cookie header manually
-        const cookieHeader = ctx.req.headers.get?.("cookie") || (ctx.req.headers as any).cookie;
+        const cookieHeader = ctx.req.headers?.get?.("cookie") || (ctx.req.headers as any)?.cookie;
         token = cookieHeader
           ?.split("; ")
           .find((c: string) => c.startsWith("session="))
