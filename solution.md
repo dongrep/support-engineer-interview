@@ -61,6 +61,21 @@
 1. Add client-side guard to prevent submitting zero or negative amounts.
 2. Add unit tests to ensure zero and negative amounts are rejected.
 
+### Ticket VAL-208: Weak Password Requirements
+
+- **Reporter**: Security Team
+- **Priority**: Critical
+- **Description**: "Password validation only checks length, not complexity"
+- **Impact**: Account security risks
+
+**RCA**: The password validation enforced only a minimum length, allowing weak passwords that lacked complexity (uppercase, lowercase, numeric, special characters).
+
+**Solution**:
+
+1. Enforce password complexity in the validation/schema: require at least 1 uppercase, 1 lowercase, 1 numeric, 1 special character, and minimum 8 characters.
+2. Add client-side feedback to show which complexity requirements are unmet as the user types.
+3. Add unit tests validating both accepted and rejected password inputs.
+
 ---
 
 ### Ticket SEC-301: SSN Storage
@@ -110,6 +125,16 @@
 **RCA**: Using `dangerouslySetHTML` for `description` while rendering `transaction.description`. This is unnecessary, or if required, a safer approach must be implemented.
 
 **Solution**: Render `transaction.description` as plain text; React will handle escaping automatically.
+
+**Ticket SEC-304: Session Management**
+
+- **Reporter**: DevOps Team
+- **Priority**: High
+- **Description**: "Multiple valid sessions per user, no invalidation"
+
+- **RCA**: No deletion of existing sessions before creating a new session, allowing multiple active sessions for the same user.
+
+- **Solution**: delete any existing sessions for the user and then insert the new session atomically so only one active session exists at a time. Apply this change to `login` flow in `server/routers/auth.ts`. Ensure `logout` continues to remove the session token and clear the cookie.
 
 ---
 
@@ -202,22 +227,6 @@
 
 1. Use tRPC utilities (invalidate queries) to invalidate the transactions and balance cache for the specific account after any mutation that affects the account (funding, withdrawal, transfer). This ensures subsequent reads fetch fresh data.
 2. Update the transfer implementation to perform both a withdrawal from the source account and a deposit into the destination account within a single, atomic mutation (or database transaction) so both ledger entries exist.
-
-### Ticket VAL-208: Weak Password Requirements
-
-- **Reporter**: Security Team
-- **Priority**: Critical
-- **Description**: "Password validation only checks length, not complexity"
-- **Impact**: Account security risks
-
-**RCA**: The password validation enforced only a minimum length, allowing weak passwords that lacked complexity (uppercase, lowercase, numeric, special characters).
-
-**Solution**:
-
-1. Enforce password complexity in the validation/schema: require at least 1 uppercase, 1 lowercase, 1 numeric, 1 special character, and minimum 8 characters.
-2. Add client-side feedback to show which complexity requirements are unmet as the user types.
-3. Add unit tests validating both accepted and rejected password inputs.
-
 
 ### Template for Future Tickets
 

@@ -140,6 +140,9 @@ export const authRouter = router({
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
 
+      // Replace any existing sessions for this user with the new one
+      
+      await db.delete(sessions).where(eq(sessions.userId, user.id));
       await db.insert(sessions).values({
         userId: user.id,
         token,
@@ -176,7 +179,7 @@ export const authRouter = router({
         await db.delete(sessions).where(eq(sessions.token, token));
       }
     }
-
+    
     if ("setHeader" in ctx.res) {
       ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
     } else {
@@ -184,5 +187,22 @@ export const authRouter = router({
     }
 
     return { success: true, message: ctx.user ? "Logged out successfully" : "No active session" };
+  }),
+
+  getCurrentUser: protectedProcedure.query(async ({ ctx }) => {
+    const user = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, ctx.user.id))
+      .get();
+
+    if (!user) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "User not found",
+      });
+    }
+
+    return { ...user, password: undefined };
   }),
 });

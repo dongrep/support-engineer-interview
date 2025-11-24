@@ -8,6 +8,8 @@ import { FundingModal } from "@/components/FundingModal";
 import { TransactionList } from "@/components/TransactionList";
 
 export default function DashboardPage() {
+  const { data: currentUser } = trpc.auth.getCurrentUser.useQuery();
+  const userId = currentUser?.id;
   const router = useRouter();
   const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [fundingAccountId, setFundingAccountId] = useState<number | null>(null);
@@ -62,6 +64,7 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">
           <div className="mb-6">
+            <h1>Welcome, {currentUser?.firstName}!</h1>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Your Accounts
             </h2>
