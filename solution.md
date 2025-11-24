@@ -39,6 +39,20 @@
 **Solution**: Fixed using age validator helper function to check if the user is at least 18 years or older
 
 ---
+### Ticket SEC-301: SSN Storage
+
+- **Reporter**: Security Audit Team  
+- **Priority**: Critical  
+- **Description**: SSNs are stored in plaintext in the database.  
+- **Impact**: Severe privacy and compliance risk.  
+
+**Solution**:  
+1. Create a random key for encryption using `crypto` and save it to environment variables.  
+2. Add two helper functions to encrypt and decrypt SSNs using an initialization vector (IV) and the key.  
+3. Use the helper functions to store the SSN in the database after validation from the form.  
+4. Write tests to ensure the helper functions work as expected.  
+
+---
 
 ### Template for Future Tickets
 
