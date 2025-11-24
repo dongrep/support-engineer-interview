@@ -171,6 +171,8 @@
 - Confirm session is removed from the store and client auth artifacts are cleared.
 - Simulate session-store failures and ensure a failure response is returned.
 
+---
+
 ### Ticket PERF-403: Session Expiry
 
 **RCA**: The server currently only sends a warning when less than a minute remains on a session. This allows near-expired sessions to be treated as valid up until the exact expiry instant, creating a narrow window where a session may still be accepted when it should be considered invalid.
@@ -180,11 +182,8 @@
 1. Update session validation in `server/trpc.ts` so sessions with 30 seconds or less remaining are treated as expired: delete the session from the store and set the request `user` to `null`.
 2. Ensure context creation deletes sessions immediately when they are expired or considered near-expired so protected routes will receive an `UNAUTHORIZED` error.
 3. Return an error for protected routes when session invalidation fails instead of silently reporting success.
-4. Add unit/integration tests to:
 
-- Simulate sessions with >30s remaining (should be valid).
-- Simulate sessions with <=30s remaining (should be deleted and the user treated as unauthenticated).
-- Simulate DB delete failures and verify error handling/logging.
+---
 
 ### Ticket PERF-404: Transaction Sorting
 
@@ -194,9 +193,9 @@
 
 1. Add an explicit `orderBy` clause to the server query that retrieves transactions (for example, order by `createdAt` descending to show newest first). Include a deterministic tie-breaker (e.g., `id`) to ensure stable ordering when timestamps are identical.
 2. Update any client-side sorting or rendering code to respect the server ordering and avoid additional client-side shuffling.
-3. Add tests:
+3. Add tests: Unit tests for the transaction retrieval query to assert returned rows are ordered as expected.
 
-- Unit tests for the transaction retrieval query to assert returned rows are ordered as expected.
+---
 
 ### Ticket PERF-405: Missing Transactions
 
@@ -212,6 +211,8 @@
 1. Invalidate the transactions cache for the affected account after any funding or mutation that creates transactions (for example, after funding, transfer, or withdrawal mutations).
 2. Ensure transactional writes (create funding and corresponding ledger entries) are committed before cache population.
 
+---
+
 ### Ticket PERF-406: Balance Calculation
 
 - **Reporter**: Finance Team
@@ -219,14 +220,48 @@
 - **Description**: "Account balances become incorrect after many transactions"
 - **Impact**: Critical financial discrepancies
 
-**RCA**: Two issues were identified:
-
-- Transfer flows: when transferring from another account, no withdrawal transaction was being created, causing the ledger and balance to become inconsistent.
+**RCA**: Transfer flows: when transferring from another account, no withdrawal transaction was being created, causing the ledger and balance to become inconsistent.
 
 **Solution**:
 
 1. Use tRPC utilities (invalidate queries) to invalidate the transactions and balance cache for the specific account after any mutation that affects the account (funding, withdrawal, transfer). This ensures subsequent reads fetch fresh data.
 2. Update the transfer implementation to perform both a withdrawal from the source account and a deposit into the destination account within a single, atomic mutation (or database transaction) so both ledger entries exist.
+  
+---
+
+### Ticket PERF-407: Performance Degradation
+
+- **Reporter**: DevOps
+- **Priority**: High
+- **Description**: "System slows down when processing multiple transactions"
+- **Impact**: Poor user experience during peak usage
+
+**RCA**: SQLite's single-writer limitation creates a bottleneck when multiple users try to create transactions simultaneously.
+**Solution**:
+
+- Migrate to PostgreSQL or MySQL, which support:
+  - Multiple concurrent writes (not just reads)
+  - Connection pooling to handle many simultaneous users
+  - Row-level locking instead of database-level locking
+  - Better concurrency control through MVCC
+
+**Result**: Multiple users can process transactions in parallel → Better performance → Improved user experience during peak usage.
+
+---
+
+**Ticket PERF-408: Resource Leak**
+
+- **Reporter**: System Monitoring
+- **Priority**: Critical
+- **Description**: "Database connections remain open"
+- **Impact**: System resource exhaustion
+
+**RCA**: A connection object was added to a connections array that is never used, and connections are not closed on cleanup, causing resource leakage.
+
+**Solution**:
+  1. Remove the unused `connections` array from `lib/db/index.ts`.
+  2. Ensure database connections are closed during application shutdown/cleanup (add a `close`/`dispose` method and call it from the process exit handler or framework shutdown hook).
+
 
 ### Template for Future Tickets
 
